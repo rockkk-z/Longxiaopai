@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成县顺路达 - 社会车主接单平台</title>
+    <!-- 百度地图JavaScript API - GL版本 -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?type=webgl&v=1.0&ak=mO1NcW2DTjXbaJNJBgN9Z42YX4639mzt"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background: #f1f5f9; /* 改为浅色背景 */
+            color: #334155;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9); /* 浅色玻璃 */
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #059669, #047857);
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transition: all 0.3s;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #64748b, #475569);
+            transition: all 0.3s;
+        }
+        
+        .order-card {
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .order-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .order-card.selected {
+            border-left-color: #059669;
+            background: #ecfdf5;
+        }
+        
+        .order-card.rejected {
+            opacity: 0.4;
+            filter: grayscale(100%);
+        }
+        
+        .order-card.accepted {
+            border-left-color: #059669;
+            background: #ecfdf5;
+            opacity: 0.8;
+        }
+        
+        .detail-panel {
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .detail-panel.show {
+            transform: translateY(0);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(241, 245, 249, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            transition: opacity 0.3s;
+        }
+        
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(5, 150, 105, 0.3);
+            border-top-color: #059669;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 3px;
+        }
+        
+        .search-input {
+            background: white;
+            border: 1px solid #cbd5e1;
+            transition: all 0.3s;
+            color: #334155;
+        }
+        
+        .search-input:focus {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+            outline: none;
+        }
+        
+        .text-slate-300 { color: #cbd5e1; }
+        .text-slate-400 { color: #94a3b8; }
+        .text-slate-500 { color: #64748b; }
+        .text-slate-600 { color: #475569; }
+        .text-slate-700 { color: #334155; }
+        .text-slate-800 { color: #1e293b; }
+        .text-slate-900 { color: #0f172a; }
+        
+        .bg-slate-50 { background-color: #f8fafc; }
+        .bg-slate-100 { background-color: #f1f5f9; }
+        .bg-slate-200 { background-color: #e2e8f0; }
+        .bg-slate-700 { background-color: #334155; }
+        .bg-slate-800 { background-color: #1e293b; }
+        .bg-slate-900 { background-color: #0f172a; }
+        
+        .border-slate-600 { border-color: #475569; }
+        .border-slate-700 { border-color: #334155; }
+        
+        /* 标签按钮样式 */
+        .filter-btn {
+            transition: all 0.2s;
+        }
+        
+        .filter-btn.active {
+            background: #059669;
+            color: white;
+        }
+        
+        .filter-btn:not(.active) {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+        
+        .filter-btn:not(.active):hover {
+            background: #cbd5e1;
+        }
+    </style>
+</head>
+<body class="flex h-screen">
+
+    <!-- 左侧：地图主区域 -->
+    <div class="flex-1 flex flex-col relative">
+        
+        <!-- 顶部搜索栏 -->
+        <div class="absolute top-0 left-0 right-0 z-30 p-4">
+            <div class="glass-panel rounded-2xl p-4 flex gap-4 items-center max-w-3xl mx-auto">
+                <div class="flex-1 relative">
+                    <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600"></i>
+                    <input type="text" 
+                           class="search-input w-full pl-12 pr-4 py-3 rounded-xl placeholder-slate-400" 
+                           placeholder="输入目的地（如：小川镇）"
+                           id="destination-input">
+                </div>
+                <button onclick="calculateRoutes()" class="btn-primary px-8 py-3 rounded-xl font-semibold text-white flex items-center gap-2">
+                    <i class="fas fa-route"></i>
+                    规划路线
+                </button>
+            </div>
+        </div>
+
+        <!-- 地图容器 -->
+        <div class="flex-1 relative">
+            <div id="map-container"></div>
+            
+            <!-- 加载遮罩 -->
+            <div id="map-loading" class="loading-overlay">
+                <div class="spinner mb-4"></div>
+                <span class="text-emerald-600 font-medium">正在加载地图...</span>
+                <span class="text-slate-500 text-sm mt-2" id="loading-status">初始化中</span>
+            </div>
+            
+            <!-- 地图图例 -->
+            <div class="absolute bottom-4 left-4 glass-panel rounded-lg p-3 text-xs space-y-2 z-20">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <span class="text-slate-600">已选订单</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <span class="text-slate-600">待选订单</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-600">我的位置</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部订单详情面板 -->
+        <div id="detail-panel" class="detail-panel absolute bottom-0 left-0 right-0 glass-panel border-t border-slate-200 p-6 z-40">
+            <div class="max-w-4xl mx-auto">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex gap-4">
+                        <div class="w-16 h-16 bg-slate-200 rounded-xl flex items-center justify-center text-2xl text-slate-600" id="detail-icon">📦</div>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 class="text-xl font-bold text-slate-800" id="detail-title">订单详情</h2>
+                                <span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded border border-emerald-200" id="detail-type">类型</span>
+                            </div>
+                            <div class="text-sm text-slate-500">
+                                <span id="detail-weight" class="text-slate-700 font-medium">-</span> · 
+                                提货时间：<span id="detail-time" class="text-amber-600 font-medium">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-emerald-600">¥<span id="detail-price">0</span></div>
+                        <div class="text-xs text-slate-500">预估收益</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                        <div class="text-xs text-slate-500 mb-1">发货地址</div>
+                        <div class="text-slate-800 font-medium" id="detail-from">-</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                        <div class="text-xs text-slate-500 mb-1">收货地址</div>
+                        <div class="text-slate-800 font-medium" id="detail-to">-</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="acceptOrder()" class="btn-primary flex-1 py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-check-circle"></i>接受订单
+                    </button>
+                    <button onclick="rejectOrder()" class="btn-danger px-6 py-3 rounded-xl font-semibold text-white flex items-center gap-2">
+                        <i class="fas fa-trash-alt"></i>删除
+                    </button>
+                    <button onclick="closeDetail()" class="btn-secondary px-6 py-3 rounded-xl font-semibold text-white flex items-center gap-2">
+                        <i class="fas fa-eye-slash"></i>忽略
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：订单列表 -->
+    <div class="w-96 glass-panel border-l border-slate-200 flex flex-col bg-white">
+        <div class="p-4 border-b border-slate-200 bg-slate-50">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">附近订单</h3>
+            <div class="flex gap-2">
+                <button onclick="filterOrders('all')" class="filter-btn active px-3 py-1.5 rounded-lg text-sm font-medium" data-filter="all">全部</button>
+                <button onclick="filterOrders('selected')" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-filter="selected">已选 <span id="selected-badge" class="ml-1 px-1.5 py-0.5 bg-emerald-500 text-white text-xs rounded-full">0</span></button>
+                <button onclick="filterOrders('urgent')" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium" data-filter="urgent">急单</button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-3 bg-slate-50" id="order-list">
+            <!-- 动态生成 -->
+        </div>
+
+        <div class="p-4 border-t border-slate-200 bg-white">
+            <div class="flex justify-between mb-2">
+                <span class="text-slate-500 text-sm">已选订单</span>
+                <span class="text-slate-800 font-bold" id="selected-count">0</span>
+            </div>
+            <div class="flex justify-between mb-3">
+                <span class="text-slate-500 text-sm">预计收入</span>
+                <span class="text-emerald-600 font-bold text-lg">¥<span id="total-income">0</span></span>
+            </div>
+            <button onclick="confirmRoute()" class="w-full btn-primary py-3 rounded-xl font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed" id="confirm-btn" disabled>
+                开始导航
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-full text-slate-800 opacity-0 transition-opacity pointer-events-none z-50 shadow-lg border border-slate-200">
+        <span id="toast-message"></span>
+    </div>
+
+    <script>
+        // 全局变量
+        let map = null;
+        let myPosition = { lng: 105.7344, lat: 33.7396 };
+        let selectedOrders = new Set(); // 已接受的订单
+        let rejectedOrders = new Set(); // 已删除的订单（从地图移除）
+        let ignoredOrders = new Set(); // 已忽略的订单（保留在地图但不在列表显示）
+        let currentOrder = null;
+        let markers = [];
+        let routeLines = []; // 存储路线，防止被清除
+
+        // 订单数据
+        const orders = [
+            { id: 1, title: '陈院乡核桃运输', type: '农产品', price: 45, weight: '50kg', from: '陈院乡梁楼村', to: '成县快递中心', fromLng: 105.6706, fromLat: 33.7508, toLng: 105.7344, toLat: 33.7396, time: '14:30', icon: '核', urgent: false },
+            { id: 2, title: '抛沙镇快递配送', type: '快递', price: 38, weight: '12件', from: '抛沙镇', to: '成县邮政', fromLng: 105.6923, fromLat: 33.7152, toLng: 105.7344, toLat: 33.7396, time: '立即', icon: '快', urgent: true },
+            { id: 3, title: '沙坝镇农资运输', type: '农资', price: 52, weight: '30kg', from: '沙坝镇', to: '城关镇', fromLng: 105.6234, fromLat: 33.6823, toLng: 105.7344, toLat: 33.7396, time: '今日内', icon: '农', urgent: false },
+            { id: 4, title: '小川镇药材配送', type: '医药', price: 35, weight: '20kg', from: '小川镇', to: '成县中医院', fromLng: 105.6123, fromLat: 33.8012, toLng: 105.7344, toLat: 33.7396, time: '17:00', icon: '药', urgent: false }
+        ];
+
+        // 初始化地图
+        function initMap() {
+            console.log('开始初始化地图...');
+            
+            try {
+                if (typeof BMapGL === 'undefined') {
+                    setTimeout(initMap, 500);
+                    return;
+                }
+
+                document.getElementById('loading-status').textContent = '创建地图实例...';
+                
+                map = new BMapGL.Map("map-container");
+                
+                const point = new BMapGL.Point(105.7344, 33.7396);
+                map.centerAndZoom(point, 13);
+                
+                map.enableScrollWheelZoom(true);
+                map.addControl(new BMapGL.ScaleControl());
+                map.addControl(new BMapGL.ZoomControl());
+                
+                // 设置地图事件，保留路线
+                map.addEventListener('movestart', function() {
+                    // 移动地图时不自动清除路线
+                    console.log('地图移动，保留路线');
+                });
+                
+                document.getElementById('loading-status').textContent = '添加标记...';
+                
+                addMyPositionMarker();
+                addOrderMarkers();
+                
+                setInterval(simulateMovement, 5000);
+                
+                setTimeout(() => {
+                    document.getElementById('map-loading').classList.add('hidden');
+                    showToast('地图加载完成');
+                }, 500);
+                
+            } catch (error) {
+                console.error('地图初始化失败:', error);
+                document.getElementById('loading-status').textContent = '错误: ' + error.message;
+                document.getElementById('loading-status').style.color = '#dc2626';
+            }
+        }
+
+        // 创建SVG图标
+        function createSvgIcon(color, text) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${color}" stroke="white" stroke-width="3"/><text x="20" y="25" text-anchor="middle" fill="white" font-size="14" font-weight="bold">${text}</text></svg>`;
+            return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        }
+
+        // 添加我的位置标记
+        function addMyPositionMarker() {
+            const point = new BMapGL.Point(myPosition.lng, myPosition.lat);
+            const iconUrl = createSvgIcon('#f59e0b', 'V');
+            const icon = new BMapGL.Icon(iconUrl, new BMapGL.Size(40, 40));
+            
+            const marker = new BMapGL.Marker(point, { icon: icon });
+            map.addOverlay(marker);
+            
+            const label = new BMapGL.Label("我的位置", {
+                offset: new BMapGL.Size(0, -30)
+            });
+            label.setStyle({
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                border: "1px solid #f59e0b",
+                borderRadius: "4px",
+                padding: "4px 8px",
+                color: "#b45309",
+                fontSize: "12px",
+                fontWeight: "bold"
+            });
+            marker.setLabel(label);
+        }
+
+        // 添加订单标记
+        function addOrderMarkers() {
+            // 清除旧标记
+            markers.forEach(m => map.removeOverlay(m.marker));
+            markers = [];
+            
+            orders.forEach(order => {
+                // 已删除的订单不显示标记
+                if (rejectedOrders.has(order.id)) return;
+                
+                const fromPoint = new BMapGL.Point(order.fromLng, order.fromLat);
+                
+                // 已接受的订单显示为绿色
+                const isSelected = selectedOrders.has(order.id);
+                const text = isSelected ? '✓' : (order.urgent ? '!' : 'O');
+                const color = isSelected ? '#059669' : (order.urgent ? '#dc2626' : '#3b82f6');
+                
+                const iconUrl = createSvgIcon(color, text);
+                const icon = new BMapGL.Icon(iconUrl, new BMapGL.Size(36, 36));
+                
+                const marker = new BMapGL.Marker(fromPoint, { icon: icon });
+                marker.addEventListener('click', () => selectOrder(order.id));
+                map.addOverlay(marker);
+                markers.push({ id: order.id, marker: marker, type: 'from' });
+            });
+        }
+
+        // 模拟移动
+        function simulateMovement() {
+            myPosition.lng += (Math.random() - 0.5) * 0.002;
+            myPosition.lat += (Math.random() - 0.5) * 0.002;
+            
+            // 只更新我的位置，不清除路线
+            refreshMyPositionOnly();
+        }
+
+        // 仅刷新我的位置（保留其他覆盖物）
+        function refreshMyPositionOnly() {
+            // 找到并更新我的位置标记
+            const allOverlays = map.getOverlays();
+            allOverlays.forEach(overlay => {
+                if (overlay instanceof BMapGL.Marker && overlay.getLabel()?.content === '我的位置') {
+                    const newPoint = new BMapGL.Point(myPosition.lng, myPosition.lat);
+                    overlay.setPosition(newPoint);
+                }
+            });
+        }
+
+        // 选择订单
+        function selectOrder(id) {
+            // 已删除的订单不可选
+            if (rejectedOrders.has(id)) return;
+            
+            currentOrder = orders.find(o => o.id === id);
+            if (!currentOrder) return;
+            
+            document.getElementById('detail-icon').textContent = currentOrder.icon;
+            document.getElementById('detail-title').textContent = currentOrder.title;
+            document.getElementById('detail-type').textContent = currentOrder.type;
+            document.getElementById('detail-price').textContent = currentOrder.price;
+            document.getElementById('detail-weight').textContent = currentOrder.weight;
+            document.getElementById('detail-time').textContent = currentOrder.time;
+            document.getElementById('detail-from').textContent = currentOrder.from;
+            document.getElementById('detail-to').textContent = currentOrder.to;
+            
+            document.getElementById('detail-panel').classList.add('show');
+            
+            // 更新列表高亮
+            renderOrderList();
+            
+            const point = new BMapGL.Point(currentOrder.fromLng, currentOrder.fromLat);
+            map.panTo(point);
+        }
+
+        // 接受订单 - 修复：正确加入已选列表
+        function acceptOrder() {
+            if (!currentOrder) return;
+            
+            selectedOrders.add(currentOrder.id);
+            
+            // 从忽略列表中移除（如果之前忽略了）
+            ignoredOrders.delete(currentOrder.id);
+            
+            updateUI();
+            closeDetail();
+            addOrderMarkers(); // 刷新标记颜色
+            
+            showToast(`已接受订单：${currentOrder.title}`);
+            renderOrderList();
+        }
+
+        // 删除订单 - 从地图彻底移除
+        function rejectOrder() {
+            if (!currentOrder) return;
+            
+            rejectedOrders.add(currentOrder.id);
+            selectedOrders.delete(currentOrder.id);
+            ignoredOrders.delete(currentOrder.id);
+            
+            updateUI();
+            closeDetail();
+            addOrderMarkers(); // 刷新标记，已删除的会消失
+            
+            showToast(`已删除订单：${currentOrder.title}`);
+            renderOrderList();
+        }
+
+        // 忽略订单 - 不接取但保留在地图
+        function closeDetail() {
+            if (currentOrder && !selectedOrders.has(currentOrder.id) && !rejectedOrders.has(currentOrder.id)) {
+                // 如果是未处理的状态，加入忽略列表
+                ignoredOrders.add(currentOrder.id);
+            }
+            
+            document.getElementById('detail-panel').classList.remove('show');
+            currentOrder = null;
+            renderOrderList();
+        }
+
+        // 更新UI
+        function updateUI() {
+            const count = selectedOrders.size;
+            document.getElementById('selected-count').textContent = count;
+            document.getElementById('selected-badge').textContent = count;
+            
+            let total = 0;
+            selectedOrders.forEach(id => {
+                const order = orders.find(o => o.id === id);
+                if (order) total += order.price;
+            });
+            document.getElementById('total-income').textContent = total;
+            
+            const btn = document.getElementById('confirm-btn');
+            btn.disabled = count === 0;
+            btn.textContent = count > 0 ? `开始导航 (${count}单)` : '开始导航';
+        }
+
+        // 筛选订单
+        function filterOrders(type) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const isActive = btn.dataset.filter === type;
+                btn.classList.toggle('active', isActive);
+            });
+            
+            renderOrderList();
+        }
+
+        // 渲染订单列表 - 修复：根据筛选条件显示
+        function renderOrderList() {
+            const container = document.getElementById('order-list');
+            const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
+            
+            const filteredOrders = orders.filter(order => {
+                // 已删除的不显示
+                if (rejectedOrders.has(order.id)) return false;
+                
+                if (activeFilter === 'selected') {
+                    return selectedOrders.has(order.id);
+                } else if (activeFilter === 'urgent') {
+                    return order.urgent && !selectedOrders.has(order.id);
+                } else {
+                    // 全部：显示未接受的（已接受的单独在"已选"标签）
+                    return !selectedOrders.has(order.id);
+                }
+            });
+            
+            // 如果没有订单，显示提示
+            if (filteredOrders.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-400">
+                        <i class="fas fa-inbox text-4xl mb-3 opacity-50"></i>
+                        <p>${activeFilter === 'selected' ? '暂无已选订单' : '暂无待接订单'}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filteredOrders.map(order => {
+                const isSelected = selectedOrders.has(order.id);
+                const isCurrent = currentOrder && currentOrder.id === order.id;
+                
+                return `
+                    <div class="order-card rounded-xl p-4 cursor-pointer ${isSelected ? 'accepted' : ''} ${isCurrent ? 'selected' : ''}" 
+                         data-order-id="${order.id}" 
+                         onclick="selectOrder(${order.id})">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="${order.urgent ? 'bg-red-500' : 'bg-emerald-500'} px-2 py-1 rounded text-xs font-bold text-white">
+                                ¥${order.price}
+                            </span>
+                            <span class="text-xs ${order.urgent ? 'text-red-600 font-bold' : 'text-emerald-600'}">
+                                ${isSelected ? '已接受' : (order.urgent ? '急单' : '顺路85%')}
+                            </span>
+                        </div>
+                        <div class="text-slate-800 font-medium mb-1">${order.title}</div>
+                        <div class="text-xs text-slate-500">${order.from} → ${order.to}</div>
+                        <div class="text-xs text-slate-400 mt-2">
+                            <i class="far fa-clock mr-1"></i>${order.time}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 规划路线 - 修复：持久化路线
+        function calculateRoutes() {
+            const input = document.getElementById('destination-input').value;
+            if (!input.trim()) {
+                showToast('请输入目的地');
+                return;
+            }
+            
+            const geo = new BMapGL.Geocoder();
+            geo.getPoint(input, (point) => {
+                if (point) {
+                    const start = new BMapGL.Point(myPosition.lng, myPosition.lat);
+                    const end = point;
+                    
+                    // 使用DrivingRoute，但配置为保留结果
+                    const driving = new BMapGL.DrivingRoute(map, {
+                        renderOptions: { 
+                            map: map, 
+                            autoViewport: true,
+                            selectFirstResult: true
+                        },
+                        onSearchComplete: function(results) {
+                            if (driving.getStatus() == BMAP_STATUS_SUCCESS) {
+                                // 获取路线并持久化存储
+                                const plan = results.getPlan(0);
+                                const route = plan.getRoute(0);
+                                
+                                // 手动绘制路线到地图（使用Polyline确保持久化）
+                                const path = route.getPath();
+                                const polyline = new BMapGL.Polyline(path, {
+                                    strokeColor: "#059669",
+                                    strokeWeight: 5,
+                                    strokeOpacity: 0.8
+                                });
+                                
+                                map.addOverlay(polyline);
+                                routeLines.push(polyline);
+                                
+                                showToast('路线规划完成（已保存）');
+                            }
+                        }
+                    });
+                    
+                    driving.search(start, end);
+                } else {
+                    showToast('未找到该地点，请尝试"小川镇"');
+                }
+            }, '陇南市成县');
+        }
+
+        // 确认路线
+        function confirmRoute() {
+            const count = selectedOrders.size;
+            if (count === 0) return;
+            
+            const titles = Array.from(selectedOrders).map(id => {
+                const order = orders.find(o => o.id === id);
+                return order ? order.title : '';
+            }).join('、');
+            
+            showToast(`导航开始！共${count}单：${titles}`);
+        }
+
+        // Toast
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 3000);
+        }
+
+        // 页面加载
+        window.onload = function() {
+            renderOrderList();
+            updateUI();
+            setTimeout(initMap, 100);
+        };
+    </script>
+</body>
+</html>

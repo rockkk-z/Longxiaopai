@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成县客运中心 - 客货邮智能调度系统</title>
+    <!-- 百度地图JavaScript API - GL版本 -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?type=webgl&v=1.0&ak=mO1NcW2DTjXbaJNJBgN9Z42YX4639mzt"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background: #f1f5f9; /* 浅色背景 */
+            color: #334155;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95); /* 浅色玻璃 */
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-card {
+            background: white;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+        
+        .glass-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #059669, #047857);
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transition: all 0.3s;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #d97706, #b45309);
+            transition: all 0.3s;
+        }
+        
+        .scheme-card {
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scheme-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scheme-card.selected {
+            border-left-color: #059669;
+            background: #ecfdf5;
+        }
+        
+        .scheme-card.warning {
+            border-left-color: #d97706;
+        }
+        
+        .scheme-card.urgent {
+            border-left-color: #dc2626;
+        }
+        
+        .bus-item {
+            transition: all 0.2s;
+            cursor: pointer;
+            background: white;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .bus-item:hover {
+            background: #f8fafc;
+            border-color: rgba(5, 150, 105, 0.3);
+        }
+        
+        .bus-item.selected {
+            background: #ecfdf5;
+            border-left: 3px solid #059669;
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(241, 245, 249, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            transition: opacity 0.3s;
+        }
+        
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(5, 150, 105, 0.3);
+            border-top-color: #059669;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .tab-btn {
+            transition: all 0.3s;
+            border-bottom: 2px solid transparent;
+            color: #64748b;
+        }
+        
+        .tab-btn.active {
+            color: #059669;
+            border-bottom-color: #059669;
+            background: #ecfdf5;
+        }
+        
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 3px;
+        }
+        
+        .emergency-btn {
+            animation: emergency-pulse 2s infinite;
+        }
+        
+        @keyframes emergency-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+        }
+        
+        .tool-btn {
+            transition: all 0.3s;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: white;
+        }
+        
+        .tool-btn:hover {
+            border-color: #059669;
+            background: #ecfdf5;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .badge-blue { background: #dbeafe; color: #1d4ed8; }
+        .badge-green { background: #d1fae5; color: #047857; }
+        .badge-amber { background: #fef3c7; color: #b45309; }
+        .badge-red { background: #fee2e2; color: #b91c1c; }
+        
+        /* 文本颜色适配 */
+        .text-slate-300 { color: #cbd5e1; }
+        .text-slate-400 { color: #94a3b8; }
+        .text-slate-500 { color: #64748b; }
+        .text-slate-600 { color: #475569; }
+        .text-slate-700 { color: #334155; }
+        .text-slate-800 { color: #1e293b; }
+        .text-slate-900 { color: #0f172a; }
+        
+        .bg-slate-50 { background-color: #f8fafc; }
+        .bg-slate-100 { background-color: #f1f5f9; }
+        .bg-slate-200 { background-color: #e2e8f0; }
+        .bg-slate-700 { background-color: #334155; }
+        .bg-slate-800 { background-color: #1e293b; }
+        .bg-slate-900 { background-color: #0f172a; }
+        
+        .border-slate-600 { border-color: #475569; }
+        .border-slate-700 { border-color: #334155; }
+        .border-slate-200 { border-color: #e2e8f0; }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- 顶部导航 -->
+    <header class="glass-panel border-b border-slate-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-30">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <i class="fas fa-bus text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800">成县客运中心</h1>
+                <p class="text-xs text-slate-500">客货邮智能调度系统</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span class="text-emerald-700 text-sm font-medium">AI调度引擎运行中</span>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button class="emergency-btn btn-danger px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2" onclick="showEmergencyPanel()">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    紧急干预
+                </button>
+                <div class="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-bold">
+                    调
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体三栏布局 -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- 左侧：方案列表 -->
+        <div class="w-80 glass-panel border-r border-slate-200 flex flex-col bg-white">
+            <!-- 标签切换 -->
+            <div class="flex border-b border-slate-200 bg-slate-50">
+                <button class="tab-btn active flex-1 py-3 text-sm font-medium text-center" onclick="switchSchemeTab('pending', this)">
+                    待确认
+                    <span class="ml-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">3</span>
+                </button>
+                <button class="tab-btn flex-1 py-3 text-sm font-medium text-center" onclick="switchSchemeTab('accepted', this)">
+                    已接受
+                    <span class="ml-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full">5</span>
+                </button>
+            </div>
+
+            <!-- 方案列表内容 -->
+            <div class="flex-1 overflow-y-auto custom-scroll p-3 space-y-3 bg-slate-50" id="scheme-list">
+                
+                <!-- 待确认方案1（常规） -->
+                <div class="scheme-card rounded-lg p-4 cursor-pointer selected" onclick="selectScheme(1)">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="badge badge-blue">14:30班次</div>
+                        <span class="text-xs text-slate-500">2分钟前</span>
+                    </div>
+                    <div class="text-slate-800 font-medium mb-2">成县→小川</div>
+                    <div class="space-y-1 text-xs text-slate-500 mb-3">
+                        <div class="flex justify-between">
+                            <span>载货</span>
+                            <span class="text-slate-700 font-medium">3单 / 120kg</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>装卸点</span>
+                            <span class="text-slate-700 font-medium">陈院乡→小川镇</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>增收</span>
+                            <span class="text-emerald-600 font-bold">¥85</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 btn-primary py-2 rounded text-xs font-medium text-white" onclick="acceptScheme(event, 1)">
+                            接受
+                        </button>
+                        <button class="flex-1 btn-danger py-2 rounded text-xs font-medium text-white" onclick="rejectScheme(event, 1)">
+                            拒绝
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 待确认方案2（非常规，带注释） -->
+                <div class="scheme-card warning rounded-lg p-4 cursor-pointer" onclick="selectScheme(2)">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="badge badge-amber">15:00班次</div>
+                        <span class="text-xs text-slate-500">5分钟前</span>
+                    </div>
+                    <div class="text-slate-800 font-medium mb-2">成县→抛沙</div>
+                    <div class="bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                        <div class="flex items-start gap-2">
+                            <i class="fas fa-info-circle text-amber-500 text-xs mt-0.5"></i>
+                            <div class="text-xs text-amber-700">
+                                建议非站点停靠：需临时停车1分钟于"抛沙镇路口"
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-1 text-xs text-slate-500 mb-3">
+                        <div class="flex justify-between">
+                            <span>载货</span>
+                            <span class="text-slate-700 font-medium">1单 / 80kg</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>绕行</span>
+                            <span class="text-amber-600 font-medium">+2分钟</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 btn-primary py-2 rounded text-xs font-medium text-white" onclick="acceptScheme(event, 2)">
+                            接受
+                        </button>
+                        <button class="flex-1 btn-danger py-2 rounded text-xs font-medium text-white" onclick="rejectScheme(event, 2)">
+                            拒绝
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 待确认方案3（紧急） -->
+                <div class="scheme-card urgent rounded-lg p-4 cursor-pointer" onclick="selectScheme(3)">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="badge badge-red">16:00班次</div>
+                        <span class="text-xs text-slate-500">刚刚</span>
+                    </div>
+                    <div class="text-slate-800 font-medium mb-2">成县→二郎</div>
+                    <div class="bg-red-50 border border-red-200 rounded p-2 mb-3">
+                        <div class="flex items-start gap-2">
+                            <i class="fas fa-exclamation-circle text-red-500 text-xs mt-0.5"></i>
+                            <div class="text-xs text-red-700">
+                                高优先级：中药材时效订单，延误将扣款
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-1 text-xs text-slate-500 mb-3">
+                        <div class="flex justify-between">
+                            <span>载货</span>
+                            <span class="text-slate-700 font-medium">2单 / 45kg</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>时效</span>
+                            <span class="text-red-600 font-bold">17:30前必达</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 btn-primary py-2 rounded text-xs font-medium text-white" onclick="acceptScheme(event, 3)">
+                            接受
+                        </button>
+                        <button class="flex-1 btn-danger py-2 rounded text-xs font-medium text-white" onclick="rejectScheme(event, 3)">
+                            拒绝
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部工具 -->
+            <div class="p-3 border-t border-slate-200 space-y-2 bg-white">
+                <button class="tool-btn w-full py-2 rounded-lg text-sm text-slate-600 flex items-center justify-center gap-2" onclick="showToast('柔性预留设置：当前预留10%空间')">
+                    <i class="fas fa-shield-alt text-emerald-500"></i>
+                    柔性预留：10%
+                </button>
+                <button class="tool-btn w-full py-2 rounded-lg text-sm text-slate-600 flex items-center justify-center gap-2" onclick="showToast('动态重算已开启：实时监测载客率')">
+                    <i class="fas fa-sync text-blue-500"></i>
+                    动态重算：开启
+                </button>
+            </div>
+        </div>
+
+        <!-- 中间：客车列表与地图 -->
+        <div class="flex-1 flex flex-col min-w-0">
+            
+            <!-- 客车列表（横向滚动） -->
+            <div class="glass-panel border-b border-slate-200 p-3 bg-white">
+                <div class="flex gap-3 overflow-x-auto custom-scroll pb-1" id="bus-list">
+                    <div class="bus-item selected rounded-lg p-3 min-w-[200px] flex-shrink-0" onclick="selectBus(1)">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="badge badge-green">行驶中</div>
+                            <span class="text-xs text-slate-500">甘K·58291</span>
+                        </div>
+                        <div class="text-slate-800 font-medium mb-1">成县→小川</div>
+                        <div class="text-xs text-slate-500 mb-2">14:30发车</div>
+                        <div class="flex gap-2 text-xs">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-user mr-1"></i>18/30
+                            </span>
+                            <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded">
+                                <i class="fas fa-box mr-1"></i>120kg
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="bus-item rounded-lg p-3 min-w-[200px] flex-shrink-0" onclick="selectBus(2)">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="badge badge-blue">待发车</div>
+                            <span class="text-xs text-slate-500">甘K·58302</span>
+                        </div>
+                        <div class="text-slate-800 font-medium mb-1">成县→抛沙</div>
+                        <div class="text-xs text-slate-500 mb-2">15:00发车</div>
+                        <div class="flex gap-2 text-xs">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-user mr-1"></i>12/30
+                            </span>
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-box mr-1"></i>0kg
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="bus-item rounded-lg p-3 min-w-[200px] flex-shrink-0" onclick="selectBus(3)">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="badge badge-amber">延误</div>
+                            <span class="text-xs text-slate-500">甘K·58115</span>
+                        </div>
+                        <div class="text-slate-800 font-medium mb-1">小川→成县</div>
+                        <div class="text-xs text-slate-500 mb-2">返程</div>
+                        <div class="flex gap-2 text-xs">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-user mr-1"></i>22/30
+                            </span>
+                            <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded">
+                                <i class="fas fa-box mr-1"></i>60kg
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="bus-item rounded-lg p-3 min-w-[200px] flex-shrink-0" onclick="selectBus(4)">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="badge badge-blue">待发车</div>
+                            <span class="text-xs text-slate-500">甘K·58203</span>
+                        </div>
+                        <div class="text-slate-800 font-medium mb-1">成县→二郎</div>
+                        <div class="text-xs text-slate-500 mb-2">16:00发车</div>
+                        <div class="flex gap-2 text-xs">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-user mr-1"></i>8/30
+                            </span>
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-600">
+                                <i class="fas fa-box mr-1"></i>0kg
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 地图可视化区域（替换原来的SVG地图） -->
+            <div class="flex-1 relative bg-slate-100">
+                <div id="map-container"></div>
+                
+                <!-- 加载遮罩 -->
+                <div id="map-loading" class="loading-overlay">
+                    <div class="spinner mb-4"></div>
+                    <span class="text-emerald-600 font-medium">正在加载地图...</span>
+                    <span class="text-slate-500 text-sm mt-2" id="loading-status">初始化中</span>
+                </div>
+
+                <!-- 地图控制 -->
+                <div class="absolute bottom-4 left-4 flex gap-2 z-10">
+                    <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition-colors shadow-lg" onclick="zoomIn()">
+                        <i class="fas fa-plus text-slate-600"></i>
+                    </button>
+                    <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition-colors shadow-lg" onclick="zoomOut()">
+                        <i class="fas fa-minus text-slate-600"></i>
+                    </button>
+                    <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition-colors shadow-lg" onclick="resetMap()">
+                        <i class="fas fa-compress-arrows-alt text-slate-600"></i>
+                    </button>
+                </div>
+
+                <!-- 图例 -->
+                <div class="absolute bottom-4 right-4 glass-panel rounded-lg p-3 text-xs space-y-2 z-10 shadow-lg">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600">装货点</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                        <span class="text-slate-600">卸货点</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                        <span class="text-slate-600">车辆位置</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                        <span class="text-slate-600">客运站</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：详情与操作面板 -->
+        <div class="w-80 glass-panel border-l border-slate-200 flex flex-col bg-white">
+            
+            <!-- 选中车辆信息 -->
+            <div class="p-4 border-b border-slate-200 bg-slate-50">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="text-2xl font-bold text-slate-800">甘K·58291</div>
+                        <div class="text-sm text-slate-500">成县→小川 14:30</div>
+                    </div>
+                    <div class="badge badge-green">行驶中</div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-white rounded-lg p-2 text-center border border-slate-200">
+                        <div class="text-lg font-bold text-slate-800">18<span class="text-sm text-slate-500">/30</span></div>
+                        <div class="text-xs text-slate-500">当前载客</div>
+                    </div>
+                    <div class="bg-emerald-50 rounded-lg p-2 text-center border border-emerald-200">
+                        <div class="text-lg font-bold text-emerald-600">120<span class="text-sm">kg</span></div>
+                        <div class="text-xs text-emerald-600">载货重量</div>
+                    </div>
+                </div>
+
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between text-slate-500">
+                        <span>剩余空间</span>
+                        <span class="text-slate-700 font-medium">还可载80kg / 0.4m³</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500">
+                        <span>预计到达</span>
+                        <span class="text-slate-700 font-medium">16:00（正点）</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500">
+                        <span>当前位置</span>
+                        <span class="text-amber-600 font-medium">陈院乡以南5km</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 当前载货清单 -->
+            <div class="flex-1 overflow-y-auto custom-scroll p-4 bg-white">
+                <h3 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                    <i class="fas fa-box text-emerald-500"></i>
+                    当前载货（3单）
+                </h3>
+                
+                <div class="space-y-3">
+                    <div class="glass-card rounded-lg p-3 border-l-2 border-emerald-500">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-slate-800 text-sm font-medium">核桃运输</span>
+                            <span class="text-xs text-emerald-600 font-bold">50kg</span>
+                        </div>
+                        <div class="text-xs text-slate-500 space-y-1">
+                            <div>陈院乡→小川镇</div>
+                            <div>货主：张合作社</div>
+                        </div>
+                        <div class="mt-2 flex gap-2">
+                            <button class="text-xs text-amber-600 hover:text-amber-700 font-medium" onclick="showToast('已通知司机优先卸货')">
+                                <i class="fas fa-arrow-up mr-1"></i>优先
+                            </button>
+                            <button class="text-xs text-red-600 hover:text-red-700 font-medium" onclick="showToast('转派功能：可转至社会车辆')">
+                                <i class="fas fa-exchange-alt mr-1"></i>转派
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card rounded-lg p-3 border-l-2 border-emerald-500">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-slate-800 text-sm font-medium">快递包裹</span>
+                            <span class="text-xs text-emerald-600 font-bold">40kg</span>
+                        </div>
+                        <div class="text-xs text-slate-500 space-y-1">
+                            <div>成县→小川代理点</div>
+                            <div>12件小件</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card rounded-lg p-3 border-l-2 border-emerald-500">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-slate-800 text-sm font-medium">农资配送</span>
+                            <span class="text-xs text-emerald-600 font-bold">30kg</span>
+                        </div>
+                        <div class="text-xs text-slate-500 space-y-1">
+                            <div>陈院乡→小川镇</div>
+                            <div>化肥2袋</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 即将到达站点的提示 -->
+                <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div class="flex items-start gap-2">
+                        <i class="fas fa-exclamation-circle text-amber-500 mt-0.5"></i>
+                        <div class="text-xs text-amber-800">
+                            <div class="font-medium mb-1">即将到达：陈院乡（装货点）</div>
+                            <div>需停车1分钟装卸，已通知司机</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部操作 -->
+            <div class="p-4 border-t border-slate-200 space-y-2 bg-slate-50">
+                <button class="w-full py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-sm text-slate-700 transition-colors flex items-center justify-center gap-2 shadow-sm" onclick="showToast('司机通讯：正在连接车载终端...')">
+                    <i class="fas fa-walkie-talkie text-slate-500"></i>
+                    司机通讯
+                </button>
+                <button class="w-full py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-sm text-slate-700 transition-colors flex items-center justify-center gap-2 shadow-sm" onclick="showToast('历史轨迹：查看今日行驶路线')">
+                    <i class="fas fa-history text-slate-500"></i>
+                    历史轨迹
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 紧急干预面板（默认隐藏） -->
+    <div id="emergency-panel" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center">
+        <div class="glass-panel rounded-2xl w-full max-w-2xl p-6 m-4 bg-white">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                    紧急干预面板
+                </h2>
+                <button onclick="hideEmergencyPanel()" class="w-8 h-8 hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <button class="p-4 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-left" onclick="showToast('已启动：全车货物转移至备用车辆')">
+                    <div class="text-red-700 font-medium mb-1"><i class="fas fa-truck-moving mr-2"></i>整车转移</div>
+                    <div class="text-xs text-slate-600">车辆故障/事故，全部货物转至备用车</div>
+                </button>
+                <button class="p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors text-left" onclick="showToast('已启动：单票货物转派社会车辆')">
+                    <div class="text-amber-700 font-medium mb-1"><i class="fas fa-exchange-alt mr-2"></i>单票转派</div>
+                    <div class="text-xs text-slate-600">某票货物延误风险，转至社会车辆</div>
+                </button>
+                <button class="p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-left" onclick="showToast('已通知：下一站跳过装卸')">
+                    <div class="text-blue-700 font-medium mb-1"><i class="fas fa-forward mr-2"></i>跳过站点</div>
+                    <div class="text-xs text-slate-600">时间紧迫，跳过某站装卸</div>
+                </button>
+                <button class="p-4 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors text-left" onclick="showToast('已启动：返程取货模式')">
+                    <div class="text-purple-700 font-medium mb-1"><i class="fas fa-undo mr-2"></i>返程取货</div>
+                    <div class="text-xs text-slate-600">返程时顺路取货，增加载货</div>
+                </button>
+            </div>
+
+            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div class="text-sm text-slate-600 mb-2 font-medium">干预记录</div>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between text-slate-700">
+                        <span>14:35 甘K·58115 延误预警</span>
+                        <span class="text-amber-600 font-medium">已转派社会车辆</span>
+                    </div>
+                    <div class="flex justify-between text-slate-700">
+                        <span>14:20 甘K·58291 装货调整</span>
+                        <span class="text-emerald-600 font-medium">已完成</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast提示 -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-full text-slate-800 opacity-0 transition-opacity pointer-events-none z-50 shadow-lg border border-slate-200">
+        <span id="toast-message"></span>
+    </div>
+
+    <script>
+        // 全局变量
+        let map = null;
+        let busMarkers = [];
+        let stationMarkers = [];
+
+        // 客车数据（成县区域）
+        const buses = [
+            { id: 1, plate: '甘K·58291', route: '成县→小川', lat: 33.7508, lng: 105.6706, status: 'running', load: 120 },
+            { id: 2, plate: '甘K·58302', route: '成县→抛沙', lat: 33.7152, lng: 105.6923, status: 'waiting', load: 0 },
+            { id: 3, plate: '甘K·58115', route: '小川→成县', lat: 33.8012, lng: 105.6123, status: 'delayed', load: 60 },
+            { id: 4, plate: '甘K·58203', route: '成县→二郎', lat: 33.7396, lng: 105.7344, status: 'waiting', load: 0 }
+        ];
+
+        // 站点数据
+        const stations = [
+            { name: '成县客运站', lat: 33.7396, lng: 105.7344, type: 'start' },
+            { name: '陈院乡', lat: 33.7508, lng: 105.6706, type: 'load' },
+            { name: '小川镇', lat: 33.8012, lng: 105.6123, type: 'unload' },
+            { name: '抛沙镇', lat: 33.7152, lng: 105.6923, type: 'load' },
+            { name: '二郎乡', lat: 33.6823, lng: 105.6234, type: 'unload' }
+        ];
+
+        // 初始化地图
+        function initMap() {
+            console.log('开始初始化地图...');
+            
+            try {
+                if (typeof BMapGL === 'undefined') {
+                    setTimeout(initMap, 500);
+                    return;
+                }
+
+                document.getElementById('loading-status').textContent = '创建地图实例...';
+                
+                map = new BMapGL.Map("map-container");
+                
+                // 成县中心点
+                const center = new BMapGL.Point(105.7344, 33.7396);
+                map.centerAndZoom(center, 13);
+                
+                map.enableScrollWheelZoom(true);
+                map.addControl(new BMapGL.ScaleControl());
+                map.addControl(new BMapGL.ZoomControl());
+                
+                document.getElementById('loading-status').textContent = '添加标记...';
+                
+                // 添加站点标记
+                addStationMarkers();
+                
+                // 添加车辆标记
+                addBusMarkers();
+                
+                // 模拟车辆移动
+                setInterval(simulateBusMovement, 5000);
+                
+                // 隐藏加载
+                setTimeout(() => {
+                    document.getElementById('map-loading').classList.add('hidden');
+                    showToast('地图加载完成');
+                }, 500);
+                
+            } catch (error) {
+                console.error('地图初始化失败:', error);
+                document.getElementById('loading-status').textContent = '错误: ' + error.message;
+                document.getElementById('loading-status').style.color = '#dc2626';
+            }
+        }
+
+        // 创建SVG图标
+        function createSvgIcon(color, text) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${color}" stroke="white" stroke-width="3"/><text x="20" y="25" text-anchor="middle" fill="white" font-size="14" font-weight="bold">${text}</text></svg>`;
+            return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        }
+
+        // 添加站点标记
+        function addStationMarkers() {
+            stations.forEach(station => {
+                const point = new BMapGL.Point(station.lng, station.lat);
+                
+                let color, text;
+                switch(station.type) {
+                    case 'start': color = '#3b82f6'; text = '起'; break;
+                    case 'load': color = '#059669'; text = '装'; break;
+                    case 'unload': color = '#dc2626'; text = '卸'; break;
+                    default: color = '#64748b'; text = '站';
+                }
+                
+                const iconUrl = createSvgIcon(color, text);
+                const icon = new BMapGL.Icon(iconUrl, new BMapGL.Size(32, 32));
+                
+                const marker = new BMapGL.Marker(point, { icon: icon });
+                map.addOverlay(marker);
+                
+                const label = new BMapGL.Label(station.name, {
+                    offset: new BMapGL.Size(0, -25)
+                });
+                label.setStyle({
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    border: "1px solid " + color,
+                    borderRadius: "4px",
+                    padding: "4px 8px",
+                    color: color,
+                    fontSize: "11px",
+                    fontWeight: "bold"
+                });
+                marker.setLabel(label);
+                
+                stationMarkers.push(marker);
+            });
+        }
+
+        // 添加车辆标记
+        function addBusMarkers() {
+            buses.forEach(bus => {
+                const point = new BMapGL.Point(bus.lng, bus.lat);
+                
+                let color, text;
+                switch(bus.status) {
+                    case 'running': color = '#d97706'; text = '行'; break;
+                    case 'waiting': color = '#3b82f6'; text = '等'; break;
+                    case 'delayed': color = '#dc2626'; text = '延'; break;
+                    default: color = '#64748b'; text = '休';
+                }
+                
+                const iconUrl = createSvgIcon(color, text);
+                const icon = new BMapGL.Icon(iconUrl, new BMapGL.Size(36, 36));
+                
+                const marker = new BMapGL.Marker(point, { icon: icon });
+                map.addOverlay(marker);
+                
+                const label = new BMapGL.Label(bus.plate, {
+                    offset: new BMapGL.Size(0, -30)
+                });
+                label.setStyle({
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    border: "1px solid " + color,
+                    borderRadius: "4px",
+                    padding: "4px 8px",
+                    color: color,
+                    fontSize: "11px",
+                    fontWeight: "bold"
+                });
+                marker.setLabel(label);
+                
+                // 点击事件
+                marker.addEventListener('click', () => {
+                    selectBusById(bus.id);
+                });
+                
+                busMarkers.push({ id: bus.id, marker: marker, data: bus });
+            });
+        }
+
+        // 模拟车辆移动
+        function simulateBusMovement() {
+            busMarkers.forEach(item => {
+                // 随机小幅移动
+                const newLng = item.data.lng + (Math.random() - 0.5) * 0.002;
+                const newLat = item.data.lat + (Math.random() - 0.5) * 0.002;
+                
+                item.data.lng = newLng;
+                item.data.lat = newLat;
+                
+                const newPoint = new BMapGL.Point(newLng, newLat);
+                item.marker.setPosition(newPoint);
+            });
+        }
+
+        // 地图控制函数
+        function zoomIn() {
+            map.zoomIn();
+        }
+
+        function zoomOut() {
+            map.zoomOut();
+        }
+
+        function resetMap() {
+            const center = new BMapGL.Point(105.7344, 33.7396);
+            map.centerAndZoom(center, 13);
+        }
+
+        // 通过ID选择车辆
+        function selectBusById(id) {
+            document.querySelectorAll('.bus-item').forEach(b => b.classList.remove('selected'));
+            
+            // 找到对应的列表项并选中
+            const busItem = document.querySelector(`.bus-item:nth-child(${id})`);
+            if (busItem) busItem.classList.add('selected');
+            
+            showToast(`选中车辆：甘K·5829${id}`);
+            
+            // 地图居中到车辆
+            const bus = buses.find(b => b.id === id);
+            if (bus) {
+                const point = new BMapGL.Point(bus.lng, bus.lat);
+                map.panTo(point);
+            }
+        }
+
+        // 原有功能函数
+        function switchSchemeTab(type, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            btn.classList.add('active');
+            showToast(`已切换至：${type === 'pending' ? '待确认' : '已接受'}方案`);
+        }
+
+        function selectScheme(id) {
+            document.querySelectorAll('.scheme-card').forEach(c => c.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            showToast(`查看方案详情：#${id}`);
+        }
+
+        function acceptScheme(event, id) {
+            event.stopPropagation();
+            showToast(`已接受方案 #${id}，已分配至相应客车`);
+        }
+
+        function rejectScheme(event, id) {
+            event.stopPropagation();
+            showToast(`已拒绝方案 #${id}，将重新计算`);
+        }
+
+        function selectBus(id) {
+            document.querySelectorAll('.bus-item').forEach(b => b.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            selectBusById(id);
+        }
+
+        function showEmergencyPanel() {
+            document.getElementById('emergency-panel').classList.remove('hidden');
+        }
+
+        function hideEmergencyPanel() {
+            document.getElementById('emergency-panel').classList.add('hidden');
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 3000);
+        }
+
+        // 点击紧急面板外部关闭
+        document.getElementById('emergency-panel').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) hideEmergencyPanel();
+        });
+
+        // 页面加载
+        window.onload = function() {
+            setTimeout(initMap, 100);
+        };
+    </script>
+</body>
+</html>

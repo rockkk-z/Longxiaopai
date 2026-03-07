@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成县顺路达 · 智能物流登录</title>
+    <!-- 使用 Tailwind + 白色主题样式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;  /* 浅灰背景，与监控平台等一致 */
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 1rem;
+        }
+        /* 浅色玻璃面板 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+        }
+        .input-field {
+            background: white;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s;
+            color: #334155;
+        }
+        .input-field:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+            outline: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(16, 185, 129, 0.3);
+        }
+        .btn-secondary {
+            background: white;
+            border: 1px solid #cbd5e1;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        /* 身份选项的活跃效果 */
+        .identity-option {
+            transition: all 0.2s;
+        }
+        .identity-option.active {
+            border-color: #10b981;
+            background: #ecfdf5;
+        }
+    </style>
+</head>
+<body>
+    <div class="glass-panel rounded-2xl w-full max-w-md p-8">
+        <!-- 标题区 -->
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
+                <i class="fas fa-box-open text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">成县顺路达</h1>
+                <p class="text-xs text-slate-500">智能客货邮 · 登录系统</p>
+            </div>
+        </div>
+
+        <form id="loginForm" class="space-y-5">
+            <!-- 车主姓名 -->
+            <div>
+                <label class="block text-sm text-slate-600 mb-1"><i class="fas fa-user mr-1 text-emerald-500"></i>姓名</label>
+                <input type="text" name="name" id="name" placeholder="例如：张合作社" required
+                       class="input-field w-full px-4 py-3 rounded-xl placeholder-slate-400">
+            </div>
+
+            <!-- 身份类型 -->
+            <div>
+                <label class="block text-sm text-slate-600 mb-1"><i class="fas fa-tag mr-1 text-emerald-500"></i>身份类型</label>
+                <select name="who" id="whoSelect" required class="input-field w-full px-4 py-3 rounded-xl">
+                    <option value="" disabled selected>—— 请选择 ——</option>
+                    <option value="客车">🚌 客车</option>
+                    <option value="货车">🚚 货车</option>
+                    <option value="邮政">📮 邮政</option>
+                    <option value="私家车">🚗 私家车</option>
+                    <option value="供货商">📦 供货商（货主）</option>
+                </select>
+            </div>
+
+            <!-- 车牌号（动态显示/隐藏） -->
+            <div id="plateField" class="hidden">
+                <label class="block text-sm text-slate-600 mb-1"><i class="fas fa-id-card mr-1 text-emerald-500"></i>车牌号</label>
+                <input type="text" name="plate" id="plate" placeholder="例如：甘K·58291"
+                       class="input-field w-full px-4 py-3 rounded-xl placeholder-slate-400">
+            </div>
+
+            <!-- 当前位置 + 定位按钮 -->
+            <div>
+                <label class="block text-sm text-slate-600 mb-1"><i class="fas fa-map-pin mr-1 text-emerald-500"></i>当前位置</label>
+                <div class="flex gap-2">
+                    <input type="text" name="where" id="location" placeholder="点击右侧按钮获取定位" required
+                           class="input-field flex-1 px-4 py-3 rounded-xl placeholder-slate-400">
+                    <button type="button" onclick="getLocation()" class="btn-secondary px-4 py-3 rounded-xl text-sm text-slate-700 whitespace-nowrap">
+                        <i class="fas fa-location-dot mr-1"></i>定位
+                    </button>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">获取浏览器地理位置，仅用于本次演示</p>
+            </div>
+
+            <!-- 登录按钮 -->
+            <button type="submit" class="btn-primary w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 mt-6">
+                <i class="fas fa-sign-in-alt"></i> 登录系统
+            </button>
+        </form>
+
+        <!-- 演示提示 -->
+        <p class="text-center text-xs text-slate-400 mt-6 border-t border-slate-200 pt-4">
+            登录后将根据身份进入对应操作平台
+        </p>
+    </div>
+
+    <script>
+        // 身份变化时控制车牌号显示
+        const whoSelect = document.getElementById('whoSelect');
+        const plateField = document.getElementById('plateField');
+        const plateInput = document.getElementById('plate');
+
+        function togglePlateField() {
+            const who = whoSelect.value;
+            // 供货商不显示车牌号
+            if (who === '供货商') {
+                plateField.classList.add('hidden');
+                plateInput.required = false;
+                plateInput.value = ''; // 清空
+            } else if (who === '客车' || who === '货车' || who === '邮政' || who === '私家车') {
+                plateField.classList.remove('hidden');
+                plateInput.required = true;
+            } else {
+                plateField.classList.add('hidden');
+                plateInput.required = false;
+            }
+        }
+        whoSelect.addEventListener('change', togglePlateField);
+        // 初始隐藏
+        togglePlateField();
+
+        // 获取浏览器地理位置
+        function getLocation() {
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                let lat = pos.coords.latitude.toFixed(6);
+                let lon = pos.coords.longitude.toFixed(6);
+                document.getElementById("location").value = lat + "," + lon;
+            }, function() {
+                alert("定位失败，请手动输入");
+            });
+        }
+
+        // 提交登录
+        document.getElementById("loginForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            
+            // 准备数据：供货商不提交车牌号
+            let data = {
+                name: this.name.value,
+                who: this.who.value,
+                where: this.where.value
+            };
+            // 如果不是供货商，才添加plate
+            if (this.who.value !== '供货商') {
+                data.plate = this.plate.value;
+            } else {
+                data.plate = ''; // 传给后端空字符串，后端会检查？但后端目前要求plate存在，我们稍后建议调整后端
+            }
+
+            fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(d => {
+                alert(d.message);
+                // 根据身份跳转
+                const who = d.who;
+                if (who === "客车" || who === "货车" || who === "邮政") {
+                    window.location.href = "/bus";
+                } else if (who === "私家车") {
+                    window.location.href = "/car";
+                } else if (who === "供货商") {
+                    window.location.href = "/shipper";
+                } else {
+                    window.location.href = "/dashboard"; // 默认
+                }
+            })
+            .catch(err => alert("登录失败"));
+        });
+    </script>
+</body>
+</html>
