@@ -1,8 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 
 app = Flask(__name__)
-app.secret_key = "secret_key"
+# 1. 建议替换成随机字符串（部署后更安全，可随便写一串字母数字）
+app.secret_key = "your_secure_secret_key_123456"  
 
+# 原有核心业务逻辑完全保留，无修改
 @app.route("/")
 def index():
     return render_template("login.html")
@@ -66,5 +68,17 @@ def dashboard():
         return redirect(url_for("index"))
     return render_template("dashboard.html", name=session["name"], who=session["who"], plate=session["plate"])
 
+# 2. 部署关键修改：适配Vercel的启动配置
 if __name__ == "__main__":
-    app.run(debug=True)
+    # debug=False：部署环境禁用调试模式（安全+避免报错）
+    # host='0.0.0.0'：让Vercel能访问到Flask服务
+    # port=int(os.getenv("PORT", 5000))：适配Vercel的端口分配（自动读取环境变量）
+    import os
+    app.run(
+        host='0.0.0.0',
+        port=int(os.getenv("PORT", 5000)),
+        debug=False  # 部署必须设为False，本地测试可改回True
+    )
+
+# 3. Vercel必需：暴露Flask app实例（WSGI入口）
+application = app
