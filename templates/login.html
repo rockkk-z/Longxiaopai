@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>陇小派 · 智能物流登录</title>
-    <!-- 使用 Tailwind + 白色主题样式 -->
+    <!-- Tailwind + 白色主题样式 (左侧图案已替换为自定义图片，路径为上一级目录下的 images/logo.png) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -12,7 +12,7 @@
         * { box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
-            background: #f1f5f9;  /* 浅灰背景，与监控平台等一致 */
+            background: #f1f5f9;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -20,7 +20,6 @@
             margin: 0;
             padding: 1rem;
         }
-        /* 浅色玻璃面板 */
         .glass-panel {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
@@ -55,22 +54,17 @@
         .btn-secondary:hover {
             background: #f1f5f9;
         }
-        /* 身份选项的活跃效果 */
-        .identity-option {
-            transition: all 0.2s;
-        }
-        .identity-option.active {
-            border-color: #10b981;
-            background: #ecfdf5;
-        }
     </style>
 </head>
 <body>
     <div class="glass-panel rounded-2xl w-full max-w-md p-8">
-        <!-- 标题区 -->
+        <!-- 标题区 · 左侧图案路径为上一级目录下的 images/logo.png (请确保文件存在) -->
         <div class="flex items-center gap-3 mb-6">
-            <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
-                <i class="fas fa-box-open text-white text-lg"></i>
+            <div class="w-10 h-10 rounded-lg overflow-hidden shadow-sm flex-shrink-0">
+                <img src="{{ url_for('static', filename='images/logo2.png') }}"
+                     alt="陇小派logo" 
+                     class="w-full h-full object-cover"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\' viewBox=\'0 0 40 40\'%3E%3Crect width=\'40\' height=\'40\' fill=\'%2310b981\' rx=\'8\' /%3E%3Cpath d=\'M12 12 L28 12 L28 28 L12 28 Z\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' /%3E%3Cpath d=\'M16 16 L24 16 L24 24 L16 24 Z\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' /%3E%3C/svg%3E';">
             </div>
             <div>
                 <h1 class="text-xl font-bold text-slate-800">陇小派</h1>
@@ -96,6 +90,7 @@
                     <option value="邮政">📮 邮政</option>
                     <option value="私家车">🚗 私家车</option>
                     <option value="供货商">📦 供货商（货主）</option>
+                    <option value="政府人员">🏢 政府人员</option>
                 </select>
             </div>
 
@@ -139,17 +134,25 @@
 
         function togglePlateField() {
             const who = whoSelect.value;
-            // 供货商不显示车牌号
-            if (who === '供货商') {
+            // 供货商和政府人员都不显示车牌号
+            if (who === '供货商' || who === '政府人员') {
                 plateField.classList.add('hidden');
                 plateInput.required = false;
                 plateInput.value = ''; // 清空
-            } else if (who === '客车' || who === '货车' || who === '邮政' || who === '私家车') {
+            } else if (['客车', '货车', '邮政', '私家车'].includes(who)) {
                 plateField.classList.remove('hidden');
                 plateInput.required = true;
             } else {
                 plateField.classList.add('hidden');
                 plateInput.required = false;
+            }
+
+            // 控制定位输入框的必填属性
+            const locationInput = document.getElementById('location');
+            if (who === '政府人员') {
+                locationInput.required = false;   // 政府人员不需要定位
+            } else {
+                locationInput.required = true;    // 其他身份必须填写定位
             }
         }
         whoSelect.addEventListener('change', togglePlateField);
@@ -181,7 +184,7 @@
             if (this.who.value !== '供货商') {
                 data.plate = this.plate.value;
             } else {
-                data.plate = ''; // 传给后端空字符串，后端会检查？但后端目前要求plate存在，我们稍后建议调整后端
+                data.plate = ''; // 传给后端空字符串
             }
 
             fetch("/login", {

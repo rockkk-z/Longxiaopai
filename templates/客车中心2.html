@@ -228,16 +228,25 @@
 </head>
 <body class="flex flex-col h-screen">
 
-    <!-- 顶部导航 -->
-    <header class="glass-panel border-b border-slate-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-30">
+    <!-- 顶部导航（修改后：在页眉中间加入图片） -->
+    <header class="glass-panel border-b border-slate-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-30 relative">
         <div class="flex items-center gap-4">
-            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <i class="fas fa-bus text-white text-lg"></i>
+            <div class="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+                <img src="{{ url_for('static', filename='images/logo2.png') }}"
+                    alt="巴士图标" 
+                    class="w-full h-full object-cover">
             </div>
             <div>
                 <h1 class="text-lg font-bold text-slate-800">陇小派</h1>
                 <p class="text-xs text-slate-500">客货邮智能调度系统</p>
             </div>
+        </div>
+        
+        <!-- 中间logo（新增） -->
+        <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <img src="{{ url_for('static', filename='images/logo.png') }}"
+                 alt="陇小派logo" 
+                 class="h-12 object-contain">
         </div>
         
         <div class="flex items-center gap-6">

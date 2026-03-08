@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>成县顺路达 · 运力匹配监控平台（集成仿真数据）</title>
+    <!-- 百度地图GL (使用callback) -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?type=webgl&v=1.0&ak=mO1NcW2DTjXbaJNJBgN9Z42YX4639mzt&callback=initMapCallback"></script>
+    <!-- Tailwind & Font Awesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background: #f1f5f9;
+            color: #334155;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .glass-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+        .glass-card:hover {
+            border-color: #10b981;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+
+        .stat-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            padding: 1rem;
+        }
+        .badge-green { background: #d1fae5; color: #047857; }
+        .badge-amber { background: #fef3c7; color: #b45309; }
+        .badge-red { background: #fee2e2; color: #b91c1c; }
+
+        .legend-dot { width: 10px; height: 10px; border-radius: 10px; display: inline-block; }
+
+        .map-loading-overlay {
+            position: absolute; inset: 0; background: #f8fafc;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 50; transition: opacity 0.4s;
+        }
+        .map-loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #cbd5e1; border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow: auto; }
+            .flex-1.overflow-hidden { flex-direction: column; }
+            .w-80 { width: 100%; }
+        }
+    </style>
+</head>
+<body class="flex flex-col">
+
+    <!-- 顶部导航 (不变) -->
+    <header class="glass-panel border-b border-slate-200 h-14 flex items-center justify-between px-6 flex-shrink-0 z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+                <!-- 替换为本地图片，注意修改 src 为你的图片实际路径 -->
+                <img src="{{ url_for('static', filename='images/logo2.png') }}"
+                    alt="巴士图标" 
+                    class="w-full h-full object-cover">
+            </div>
+            <div>
+                <h1 class="text-base font-semibold text-slate-800">成县顺路达 · 运力匹配监控平台</h1>
+                <p class="text-[10px] text-emerald-600">仿真数据驱动 · 最新步102</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-200 shadow-sm">
+                <i class="fas fa-sync-alt mr-1 text-emerald-500"></i> 实时匹配引擎
+            </div>
+            <div class="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-bold border border-slate-300">
+                <i class="fas fa-chart-pie text-sm"></i>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体三栏布局 -->
+    <div class="flex flex-1 overflow-hidden">
+
+        <!-- 左侧：需求总览 (静态，可视为仿真初始需求) -->
+        <div class="w-80 flex flex-col gap-3 p-4 overflow-y-auto custom-scroll flex-shrink-0 bg-slate-50">
+            <!-- 核心需求卡片 -->
+            <div class="glass-card rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-slate-500"><i class="fas fa-boxes text-emerald-500 mr-1"></i> 今日需求总览</span>
+                    <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">下行/上行</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="stat-card text-center">
+                        <div class="text-2xl font-bold text-emerald-600">1,284</div>
+                        <div class="text-xs text-slate-500">总包裹数</div>
+                    </div>
+                    <div class="stat-card text-center">
+                        <div class="text-2xl font-bold text-amber-600">86</div>
+                        <div class="text-xs text-slate-500">紧急包裹</div>
+                    </div>
+                    <div class="stat-card text-center">
+                        <div class="text-2xl font-bold text-blue-600">7.2t</div>
+                        <div class="text-xs text-slate-500">总重量</div>
+                    </div>
+                    <div class="stat-card text-center">
+                        <div class="text-2xl font-bold text-purple-600">17</div>
+                        <div class="text-xs text-slate-500">覆盖乡镇</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 按乡镇需求排行 (静态) -->
+            <div class="glass-card rounded-2xl p-4">
+                <span class="text-xs font-medium text-slate-500 flex items-center gap-1"><i class="fas fa-map-marker-alt text-emerald-500"></i> 乡镇需求排行 (下行+上行)</span>
+                <div class="mt-3 space-y-2">
+                    <div class="flex items-center justify-between text-sm"><span>城关镇</span><span class="font-medium text-emerald-600">327件</span></div>
+                    <div class="w-full bg-slate-200 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 100%"></div></div>
+                    <div class="flex items-center justify-between text-sm"><span>小川镇</span><span class="font-medium">214件</span></div>
+                    <div class="w-full bg-slate-200 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 65%"></div></div>
+                    <div class="flex items-center justify-between text-sm"><span>抛沙镇</span><span class="font-medium">189件</span></div>
+                    <div class="w-full bg-slate-200 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 58%"></div></div>
+                    <div class="flex items-center justify-between text-sm"><span>红川镇</span><span class="font-medium">156件</span></div>
+                    <div class="w-full bg-slate-200 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 48%"></div></div>
+                    <div class="flex items-center justify-between text-sm"><span>陈院镇</span><span class="font-medium">132件</span></div>
+                    <div class="w-full bg-slate-200 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 40%"></div></div>
+                </div>
+            </div>
+
+            <!-- 下行 vs 上行 分布 (静态) -->
+            <div class="glass-card rounded-2xl p-4">
+                <span class="text-xs font-medium text-slate-500"><i class="fas fa-arrow-down text-blue-500 mr-1"></i> 方向分布</span>
+                <div class="flex mt-3 gap-4 items-center">
+                    <div class="flex-1">
+                        <div class="flex justify-between text-xs"><span>下行 (县城→乡镇)</span><span>732件</span></div>
+                        <div class="w-full bg-slate-200 h-2 rounded-full mt-1"><div class="bg-blue-500 h-2 rounded-full" style="width: 57%"></div></div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between text-xs"><span>上行 (乡镇→县城)</span><span>552件</span></div>
+                        <div class="w-full bg-slate-200 h-2 rounded-full mt-1"><div class="bg-amber-500 h-2 rounded-full" style="width: 43%"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 紧急需求分布 (静态) -->
+            <div class="glass-card rounded-2xl p-4">
+                <span class="text-xs font-medium text-slate-500"><i class="fas fa-exclamation-triangle text-red-500 mr-1"></i> 紧急包裹分布</span>
+                <div class="mt-2 space-y-2">
+                    <div class="flex justify-between"><span>小川镇</span><span class="text-red-600 font-medium">12件</span></div>
+                    <div class="flex justify-between"><span>抛沙镇</span><span class="text-red-600 font-medium">9件</span></div>
+                    <div class="flex justify-between"><span>城关镇</span><span class="text-red-600 font-medium">8件</span></div>
+                    <div class="flex justify-between"><span>陈院镇</span><span class="text-red-600 font-medium">7件</span></div>
+                    <div class="flex justify-between"><span>王磨镇</span><span class="text-red-600 font-medium">5件</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间：地图区域 (完全不变) -->
+        <div class="flex-1 relative">
+            <div id="map-container" class="w-full h-full"></div>
+            <!-- 地图加载遮罩 -->
+            <div id="map-loading" class="map-loading-overlay">
+                <div class="spinner"></div>
+                <div class="text-sm text-emerald-600 mt-4 font-medium">加载地图与数据图层...</div>
+                <div class="text-xs text-slate-500 mt-1" id="loading-status">初始化百度GL引擎</div>
+            </div>
+
+            <!-- 地图控件 -->
+            <div class="absolute bottom-4 left-4 flex gap-2 z-10">
+                <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition" id="zoomInBtn"><i class="fas fa-plus text-slate-600"></i></button>
+                <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition" id="zoomOutBtn"><i class="fas fa-minus text-slate-600"></i></button>
+                <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition" id="resetViewBtn"><i class="fas fa-crosshairs text-slate-600"></i></button>
+                <button class="glass-panel p-2 rounded-lg hover:bg-slate-100 transition" id="fitBoundsBtn"><i class="fas fa-globe text-slate-600"></i></button>
+            </div>
+            <!-- 图例 -->
+            <div class="absolute bottom-4 right-4 glass-panel rounded-xl p-3 text-xs space-y-1.5 z-10 shadow-lg">
+                <div class="flex items-center gap-2"><span class="legend-dot bg-emerald-500"></span><span class="text-slate-600">下行需求点 (装货)</span></div>
+                <div class="flex items-center gap-2"><span class="legend-dot bg-red-500"></span><span class="text-slate-600">上行需求点 (卸货)</span></div>
+                <div class="flex items-center gap-2"><span class="legend-dot bg-amber-500"></span><span class="text-slate-600">社会车辆</span></div>
+                <div class="flex items-center gap-2"><span class="legend-dot bg-blue-500"></span><span class="text-slate-600">客运班车</span></div>
+            </div>
+        </div>
+
+        <!-- 右侧：运力列表 + 匹配建议 (社会车辆/客车不变，实时需求摘要替换为仿真任务动态) -->
+        <div class="w-80 flex flex-col gap-3 p-4 overflow-y-auto custom-scroll flex-shrink-0 bg-slate-50">
+            <!-- 社会车辆运力 (不变) -->
+            <div class="glass-card rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500"><i class="fas fa-truck text-emerald-500 mr-1"></i> 社会车辆 · 剩余运力</span>
+                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">6辆活跃</span>
+                </div>
+                <div class="space-y-2 max-h-48 overflow-y-auto custom-scroll pr-1">
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·58291</span><div class="text-xs text-slate-500">城关镇南山村</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">剩75kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·58302</span><div class="text-xs text-slate-500">城关镇枣儿沟村</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">剩396kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·7F291</span><div class="text-xs text-slate-500">抛沙镇任湾村</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">剩159kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·A3712</span><div class="text-xs text-slate-500">小川镇小川村</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">剩378kg</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 客运班车运力 (不变) -->
+            <div class="glass-card rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500"><i class="fas fa-bus text-blue-500 mr-1"></i> 客运班车 · 可捎货量</span>
+                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">12条线路</span>
+                </div>
+                <div class="space-y-2 max-h-44 overflow-y-auto custom-scroll pr-1">
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·0018</span><div class="text-xs text-slate-500">成县-武都</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">319kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·0036</span><div class="text-xs text-slate-500">成县-兰州</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">413kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·0052</span><div class="text-xs text-slate-500">成县-天水</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">277kg</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-slate-100 rounded-lg">
+                        <div><span class="text-sm font-medium">甘K·0073</span><div class="text-xs text-slate-500">成县-康县</div></div>
+                        <span class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">250kg</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 运力匹配建议 (不变) -->
+            <div class="glass-card rounded-2xl p-4">
+                <span class="text-xs font-medium text-slate-500"><i class="fas fa-handshake text-emerald-500 mr-1"></i> 智能匹配建议</span>
+                <div class="mt-3 space-y-2">
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-xs">
+                        <i class="fas fa-check-circle text-emerald-500 mr-1"></i> <span class="font-medium">甘K·58291</span> 顺路承运陈院镇下行包裹3件 (共45kg)，剩余30kg
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs">
+                        <i class="fas fa-exclamation-triangle text-amber-500 mr-1"></i> 小川镇急件12件，建议调派甘K·0036班车捎带 (可装413kg)
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs">
+                        <i class="fas fa-clock text-blue-500 mr-1"></i> 抛沙镇上行包裹量较大，甘K·7F291 返程可带159kg
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== 替换后的“实时需求摘要”卡片：展示仿真任务动态 ========== -->
+            <div class="glass-card rounded-2xl p-4">
+                <span class="text-xs font-medium text-slate-500"><i class="fas fa-microchip text-emerald-500 mr-1"></i> 仿真任务动态 (最新步骤)</span>
+                <div class="mt-2 space-y-2 max-h-40 overflow-y-auto text-xs" id="sim-task-list">
+                    <!-- 由JS动态生成 -->
+                </div>
+                <div class="mt-2 flex justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1">
+                    <span>累计完成: <span id="sim-completed">222</span> 单</span>
+                    <span>当前步: <span id="sim-step">102</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 (不变) -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-full text-slate-800 opacity-0 transition-opacity pointer-events-none z-50 shadow-xl border border-slate-200">
+        <span id="toast-message"></span>
+    </div>
+
+    <!-- 原有地图脚本 (增强版) 保持不变 -->
+    <script>
+        (function() {
+            // 数据定义 (需求点、车辆、客车) 完全不变
+            const locationMap = {
+                '城关镇': { lng: 105.759253, lat: 33.755431 },
+                '黄渚镇': { lng: 105.691685, lat: 33.975453 },
+                '红川镇': { lng: 105.903889, lat: 33.756302 },
+                '小川镇': { lng: 105.576613, lat: 33.685747 },
+                '纸坊镇': { lng: 105.493799, lat: 33.730691 },
+                '抛沙镇': { lng: 105.685040, lat: 33.728101 },
+                '店村镇': { lng: 105.846355, lat: 33.765940 },
+                '王磨镇': { lng: 105.688013, lat: 33.854816 },
+                '陈院镇': { lng: 105.689271, lat: 33.766175 },
+                '沙坝镇': { lng: 105.576530, lat: 33.736137 },
+                '黄陈镇': { lng: 105.611680, lat: 33.592401 },
+                '鸡峰镇': { lng: 105.664415, lat: 33.660997 },
+                '苏元镇': { lng: 105.462844, lat: 33.679032 },
+                '索池镇': { lng: 105.524415, lat: 33.649428 },
+                '宋坪乡': { lng: 105.920919, lat: 33.609940 },
+                '二郎乡': { lng: 105.605201, lat: 33.842372 },
+                '镡河乡': { lng: 105.667174, lat: 33.541665 },
+                '城关镇南山村': { lng: 105.736591, lat: 33.723173 },
+                '城关镇枣儿沟村': { lng: 105.784881, lat: 33.774603 },
+                '抛沙镇任湾村': { lng: 105.649567, lat: 33.692349 },
+                '小川镇小川村': { lng: 105.572648, lat: 33.681071 },
+                '陈院镇梁楼村': { lng: 105.699562, lat: 33.763528 },
+                '店村镇东大寨村': { lng: 105.831362, lat: 33.804358 }
+            };
+
+            const demandPoints = [
+                { name: '城关镇', type: 'down', count: 180, weight: 920, lat: 33.755431, lng: 105.759253 },
+                { name: '城关镇', type: 'up', count: 147, weight: 710, lat: 33.755431, lng: 105.759253 },
+                { name: '小川镇', type: 'down', count: 112, weight: 580, lat: 33.685747, lng: 105.576613 },
+                { name: '小川镇', type: 'up', count: 102, weight: 495, lat: 33.685747, lng: 105.576613 },
+                { name: '抛沙镇', type: 'down', count: 98, weight: 510, lat: 33.728101, lng: 105.685040 },
+                { name: '抛沙镇', type: 'up', count: 91, weight: 470, lat: 33.728101, lng: 105.685040 },
+                { name: '红川镇', type: 'down', count: 82, weight: 430, lat: 33.756302, lng: 105.903889 },
+                { name: '红川镇', type: 'up', count: 74, weight: 385, lat: 33.756302, lng: 105.903889 },
+                { name: '陈院镇', type: 'down', count: 68, weight: 350, lat: 33.766175, lng: 105.689271 },
+                { name: '陈院镇', type: 'up', count: 64, weight: 320, lat: 33.766175, lng: 105.689271 },
+                { name: '王磨镇', type: 'down', count: 55, weight: 280, lat: 33.854816, lng: 105.688013 },
+                { name: '王磨镇', type: 'up', count: 49, weight: 250, lat: 33.854816, lng: 105.688013 },
+                { name: '店村镇', type: 'down', count: 60, weight: 310, lat: 33.765940, lng: 105.846355 },
+                { name: '店村镇', type: 'up', count: 52, weight: 265, lat: 33.765940, lng: 105.846355 },
+                { name: '沙坝镇', type: 'down', count: 48, weight: 245, lat: 33.736137, lng: 105.576530 },
+                { name: '沙坝镇', type: 'up', count: 41, weight: 210, lat: 33.736137, lng: 105.576530 }
+            ];
+
+            const vehicles = [
+                { plate: '甘K·58291', lat: 33.723173, lng: 105.736591, load: 725, max: 800, type: 'car' },
+                { plate: '甘K·58302', lat: 33.774603, lng: 105.784881, load: 404, max: 800, type: 'car' },
+                { plate: '甘K·7F291', lat: 33.692349, lng: 105.649567, load: 641, max: 800, type: 'car' },
+                { plate: '甘K·A3712', lat: 33.681071, lng: 105.572648, load: 422, max: 800, type: 'car' },
+                { plate: '甘K·58115', lat: 33.763528, lng: 105.699562, load: 578, max: 800, type: 'car' },
+            ];
+
+            const buses = [
+                { plate: '甘K·0018', route: '成县-武都', lat: 33.7396 + (Math.random()*0.01-0.005), lng: 105.7344 + (Math.random()*0.01-0.005), capacity: 319, type: 'bus' },
+                { plate: '甘K·0036', route: '成县-兰州', lat: 33.7396 + (Math.random()*0.01-0.005), lng: 105.7344 + (Math.random()*0.01-0.005), capacity: 413, type: 'bus' },
+                { plate: '甘K·0052', route: '成县-天水', lat: 33.7396 + (Math.random()*0.01-0.005), lng: 105.7344 + (Math.random()*0.01-0.005), capacity: 277, type: 'bus' },
+                { plate: '甘K·0073', route: '成县-康县', lat: 33.7396 + (Math.random()*0.01-0.005), lng: 105.7344 + (Math.random()*0.01-0.005), capacity: 250, type: 'bus' },
+            ];
+
+            let map = null;
+            let markers = [];
+
+            function createSvgIcon(color, text, size = 32) {
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${color}" stroke="white" stroke-width="2"/><text x="20" y="26" text-anchor="middle" fill="white" font-size="16" font-weight="bold">${text}</text></svg>`;
+                return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+            }
+
+            function showToast(msg) {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-message').innerText = msg;
+                toast.classList.remove('opacity-0');
+                setTimeout(() => toast.classList.add('opacity-0'), 2000);
+            }
+            window.showToast = showToast;
+
+            function initMapContent() {
+                document.getElementById('loading-status').innerText = '添加需求点...';
+                let infoWindow = new BMapGL.InfoWindow('', { width: 200, height: 100, offset: new BMapGL.Size(0, -20) });
+
+                demandPoints.forEach(d => {
+                    const point = new BMapGL.Point(d.lng, d.lat);
+                    const color = d.type === 'down' ? '#10b981' : '#ef4444';
+                    const iconText = d.type === 'down' ? '下' : '上';
+                    const icon = createSvgIcon(color, iconText, 28);
+                    const marker = new BMapGL.Marker(point, { icon: new BMapGL.Icon(icon, new BMapGL.Size(28, 28)) });
+                    map.addOverlay(marker);
+                    const label = new BMapGL.Label(`${d.name} ${d.count}件`, { offset: new BMapGL.Size(0, -22) });
+                    label.setStyle({
+                        backgroundColor: 'white',
+                        border: `1px solid ${color}`,
+                        borderRadius: '12px',
+                        padding: '2px 6px',
+                        color: '#334155',
+                        fontSize: '10px',
+                        fontWeight: 'bold'
+                    });
+                    marker.setLabel(label);
+                    marker.addEventListener('click', () => {
+                        infoWindow.setContent(`
+                            <div style="font-family: 'Inter',sans-serif; padding:4px;">
+                                <div style="font-weight:bold; margin-bottom:4px;">${d.name} · ${d.type==='down'?'下行':'上行'}</div>
+                                <div>包裹数：${d.count} 件</div>
+                                <div>预估重量：${d.weight} kg</div>
+                                ${d.type==='down'?'<div style="color:#10b981">需装货至乡镇</div>':'<div style="color:#ef4444">需运回县城</div>'}
+                            </div>
+                        `);
+                        map.openInfoWindow(infoWindow, point);
+                    });
+                    markers.push(marker);
+                });
+
+                vehicles.forEach(v => {
+                    const point = new BMapGL.Point(v.lng, v.lat);
+                    const icon = createSvgIcon('#f59e0b', '车', 32);
+                    const marker = new BMapGL.Marker(point, { icon: new BMapGL.Icon(icon, new BMapGL.Size(32, 32)) });
+                    map.addOverlay(marker);
+                    const label = new BMapGL.Label(v.plate, { offset: new BMapGL.Size(0, -24) });
+                    label.setStyle({
+                        backgroundColor: 'white',
+                        border: '1px solid #f59e0b',
+                        borderRadius: '10px',
+                        padding: '2px 5px',
+                        color: '#b45309',
+                        fontSize: '9px'
+                    });
+                    marker.setLabel(label);
+                    marker.addEventListener('click', () => {
+                        infoWindow.setContent(`
+                            <div style="font-family: 'Inter',sans-serif; padding:4px;">
+                                <div style="font-weight:bold; margin-bottom:4px;">${v.plate}</div>
+                                <div>剩余载货：${v.max - v.load} kg / 800kg</div>
+                                <div>当前位置附近</div>
+                            </div>
+                        `);
+                        map.openInfoWindow(infoWindow, point);
+                    });
+                    markers.push(marker);
+                });
+
+                buses.forEach(b => {
+                    const point = new BMapGL.Point(b.lng, b.lat);
+                    const icon = createSvgIcon('#3b82f6', '客', 32);
+                    const marker = new BMapGL.Marker(point, { icon: new BMapGL.Icon(icon, new BMapGL.Size(32, 32)) });
+                    map.addOverlay(marker);
+                    const label = new BMapGL.Label(b.plate, { offset: new BMapGL.Size(0, -24) });
+                    label.setStyle({
+                        backgroundColor: 'white',
+                        border: '1px solid #3b82f6',
+                        borderRadius: '10px',
+                        padding: '2px 5px',
+                        color: '#1e3a8a',
+                        fontSize: '9px'
+                    });
+                    marker.setLabel(label);
+                    marker.addEventListener('click', () => {
+                        infoWindow.setContent(`
+                            <div style="font-family: 'Inter',sans-serif; padding:4px;">
+                                <div style="font-weight:bold; margin-bottom:4px;">${b.plate} · ${b.route}</div>
+                                <div>可捎货容量：${b.capacity} kg</div>
+                            </div>
+                        `);
+                        map.openInfoWindow(infoWindow, point);
+                    });
+                    markers.push(marker);
+                });
+
+                setTimeout(() => {
+                    document.getElementById('map-loading').classList.add('hidden');
+                }, 300);
+            }
+
+            window.initMapCallback = function() {
+                document.getElementById('loading-status').innerText = '创建地图...';
+                map = new BMapGL.Map('map-container');
+                const center = new BMapGL.Point(105.694, 33.728);
+                map.centerAndZoom(center, 11);
+                map.enableScrollWheelZoom(true);
+                map.addControl(new BMapGL.ScaleControl());
+                map.addControl(new BMapGL.ZoomControl());
+
+                initMapContent();
+
+                document.getElementById('zoomInBtn').addEventListener('click', function() {
+                    if (map) map.zoomIn();
+                });
+                document.getElementById('zoomOutBtn').addEventListener('click', function() {
+                    if (map) map.zoomOut();
+                });
+                document.getElementById('resetViewBtn').addEventListener('click', function() {
+                    if (map) map.setCenter(new BMapGL.Point(105.694, 33.728));
+                });
+                document.getElementById('fitBoundsBtn').addEventListener('click', function() {
+                    if (map && markers.length) {
+                        const points = markers.map(m => m.getPosition());
+                        map.setViewport(points);
+                    }
+                });
+            };
+
+            window.onload = function() {
+                if (typeof BMapGL !== 'undefined' && !map) {
+                    initMapCallback();
+                }
+            };
+        })();
+    </script>
+
+    <!-- 仿真数据处理脚本：填充右侧“仿真任务动态”卡片 -->
+    <script>
+        (function() {
+            // 从CSV解析得到的仿真数据数组 (完整)
+            const simData = [
+                {step:75, time:22500, vehicle:"social_P202602010172", task:"20260201D029002", reward:-23.3583225, completed:3},
+                {step:75, time:22500, vehicle:"social_V202602010145", task:"20260201D005004", reward:-23.3583225, completed:3},
+                {step:75, time:22500, vehicle:"social_P202602010265", task:"20260201D001001", reward:-23.3583225, completed:3},
+                {step:76, time:22800, vehicle:"social_P202602010172", task:"20260201D017004", reward:-9.511970258, completed:7},
+                {step:76, time:22800, vehicle:"social_V202602010145", task:"20260201D006001", reward:-9.511970258, completed:7},
+                {step:76, time:22800, vehicle:"social_P202602010265", task:"20260201D001002", reward:-9.511970258, completed:7},
+                {step:76, time:22800, vehicle:"social_V202602010164", task:"20260201D027004", reward:-9.511970258, completed:7},
+                {step:76, time:22800, vehicle:"social_P202602010103", task:"20260201D001002", reward:-9.511970258, completed:7},
+                {step:77, time:23100, vehicle:"social_P202602010172", task:"20260201D030005", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_V202602010145", task:"20260201D006004", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_P202602010265", task:"20260201D025002", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_V202602010164", task:"20260201D027008", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_P202602010103", task:"20260201D002002", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_P202602010135", task:"20260201D002001", reward:15.700964451837109, completed:14},
+                {step:77, time:23100, vehicle:"social_P202602010195", task:"20260201D012001", reward:15.700964451837109, completed:14},
+                {step:78, time:23400, vehicle:"social_P202602010172", task:"20260201D031007", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_V202602010145", task:"20260201D007003", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_V202602010164", task:"20260201D028004", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_P202602010103", task:"20260201D007003", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_P202602010135", task:"20260201D002003", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_P202602010195", task:"20260201D012005", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_V202602010198", task:"20260201D003001", reward:5.672029376, completed:21},
+                {step:78, time:23400, vehicle:"social_V202602010194", task:"20260201D026009", reward:5.672029376, completed:21},
+                {step:79, time:23700, vehicle:"social_P202602010172", task:"20260201D032005", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_V202602010145", task:"20260201D008001", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_V202602010164", task:"20260201D029004", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_P202602010103", task:"20260201D002005", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_P202602010135", task:"20260201D001008", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_P202602010195", task:"20260201D012009", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_V202602010198", task:"20260201D004001", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_V202602010194", task:"20260201D027006", reward:-17.18968028, completed:30},
+                {step:79, time:23700, vehicle:"social_P202602010153", task:"20260201D019003", reward:-17.18968028, completed:30},
+                {step:80, time:24000, vehicle:"social_P202602010172", task:"20260201D034002", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_V202602010145", task:"20260201D009002", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_V202602010164", task:"20260201D031004", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_P202602010103", task:"20260201D002007", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_P202602010135", task:"20260201D002008", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_P202602010195", task:"20260201D013002", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_V202602010198", task:"20260201D004004", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_V202602010194", task:"20260201D028005", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_P202602010153", task:"20260201D020005", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_P202602010057", task:"20260201D014001", reward:18.673174230937143, completed:41},
+                {step:80, time:24000, vehicle:"social_V202602010096", task:"20260201D022003", reward:18.673174230937143, completed:41},
+                {step:81, time:24300, vehicle:"social_P202602010172", task:"20260201D036001", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010145", task:"20260201D009006", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010164", task:"20260201D033001", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010103", task:"20260201D003002", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010135", task:"20260201D002006", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010195", task:"20260201D013007", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010198", task:"20260201D005002", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010194", task:"20260201D031001", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010153", task:"20260201D021004", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010057", task:"20260201D015001", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010096", task:"20260201D023002", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_V202602010026", task:"20260201D007002", reward:-64.02199517, completed:54},
+                {step:81, time:24300, vehicle:"social_P202602010052", task:"20260201D005005", reward:-64.02199517, completed:54},
+                {step:82, time:24600, vehicle:"social_P202602010172", task:"20260201D037001", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010145", task:"20260201D010006", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010164", task:"20260201D035003", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010103", task:"20260201D004003", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010135", task:"20260201D004002", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010195", task:"20260201D015003", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010198", task:"20260201D007001", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010194", task:"20260201D032006", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010153", task:"20260201D023001", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010057", task:"20260201D016003", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010096", task:"20260201D024001", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010026", task:"20260201D009001", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_P202602010052", task:"20260201D007005", reward:18.525585386234226, completed:68},
+                {step:82, time:24600, vehicle:"social_V202602010144", task:"20260201D001006", reward:18.525585386234226, completed:68},
+                {step:83, time:24900, vehicle:"social_P202602010172", task:"20260201D024002", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010145", task:"20260201D011005", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010164", task:"20260201D036010", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010103", task:"20260201D005003", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010135", task:"20260201D005001", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010195", task:"20260201D016006", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010198", task:"20260201D009003", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010194", task:"20260201D035004", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010153", task:"20260201D024002", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010057", task:"20260201D017002", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010096", task:"20260201D025005", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010211", task:"20260201D004005", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010026", task:"20260201D010008", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_P202602010052", task:"20260201D009005", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010144", task:"20260201D006002", reward:59.60408162892042, completed:83},
+                {step:83, time:24900, vehicle:"social_V202602010211", task:"20260201D008003", reward:59.60408162892042, completed:83},
+                {step:84, time:25200, vehicle:"social_P202602010172", task:"20260201D041007", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010145", task:"20260201D012007", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010164", task:"20260201D039001", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010103", task:"20260201D009004", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010135", task:"20260201D008002", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010195", task:"20260201D018004", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010198", task:"20260201D010005", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010194", task:"20260201D036013", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010153", task:"20260201D025008", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010057", task:"20260201D019002", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010026", task:"20260201D011004", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010052", task:"20260201D011001", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010144", task:"20260201D010001", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_V202602010211", task:"20260201D010004", reward:-13.08517032, completed:98},
+                {step:84, time:25200, vehicle:"social_P202602010209", task:"20260201D036012", reward:-13.08517032, completed:98},
+                {step:85, time:25500, vehicle:"social_P202602010172", task:"20260201D043002", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010145", task:"20260201D013005", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010164", task:"20260201D041004", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010103", task:"20260201D013005", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010135", task:"20260201D010002", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010195", task:"20260201D020003", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010198", task:"20260201D011007", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010194", task:"20260201D020003", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010057", task:"20260201D021002", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010026", task:"20260201D012004", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010052", task:"20260201D011009", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010144", task:"20260201D010007", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010211", task:"20260201D011006", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010209", task:"20260201D039002", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010029", task:"20260201D010007", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010152", task:"20260201D033007", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_V202602010206", task:"20260201D041001", reward:-40.88082927, completed:113},
+                {step:85, time:25500, vehicle:"social_P202602010259", task:"20260201D036004", reward:-40.88082927, completed:113},
+                {step:86, time:25800, vehicle:"social_P202602010172", task:"20260201D046001", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010145", task:"20260201D015002", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010164", task:"20260201D027003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010103", task:"20260201D013003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010135", task:"20260201D011003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010194", task:"20260201D041006", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010026", task:"20260201D013001", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010052", task:"20260201D012010", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010144", task:"20260201D011003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010211", task:"20260201D012003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010209", task:"20260201D041005", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010029", task:"20260201D011008", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010152", task:"20260201D036003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010206", task:"20260201D042002", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010259", task:"20260201D037006", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010059", task:"20260201D011003", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_P202602010197", task:"20260201D011008", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010121", task:"20260201D022004", reward:67.93503096687706, completed:129},
+                {step:86, time:25800, vehicle:"social_V202602010063", task:"20260201D035005", reward:67.93503096687706, completed:129},
+                {step:87, time:26100, vehicle:"social_P202602010172", task:"20260201D047010", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010145", task:"20260201D016005", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010164", task:"20260201D045006", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010135", task:"20260201D012002", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010198", task:"20260201D012012", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010194", task:"20260201D043003", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010052", task:"20260201D013006", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010144", task:"20260201D012002", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010211", task:"20260201D012011", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010209", task:"20260201D043001", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010152", task:"20260201D038001", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010206", task:"20260201D045003", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010259", task:"20260201D040003", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010059", task:"20260201D012002", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_P202602010197", task:"20260201D012012", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010121", task:"20260201D023005", reward:120.37509567095353, completed:143},
+                {step:87, time:26100, vehicle:"social_V202602010063", task:"20260201D037002", reward:120.37509567095353, completed:143},
+                {step:88, time:26400, vehicle:"social_P202602010172", task:"20260201D049006", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010145", task:"20260201D017001", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010164", task:"20260201D047006", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010194", task:"20260201D045007", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010211", task:"20260201D012008", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010209", task:"20260201D045005", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010152", task:"20260201D034004", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010206", task:"20260201D047003", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010259", task:"20260201D032003", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010059", task:"20260201D001005", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010197", task:"20260201D012008", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010121", task:"20260201D023011", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_V202602010063", task:"20260201D041002", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010245", task:"20260201D037005", reward:9.592978642674554, completed:157},
+                {step:88, time:26400, vehicle:"social_P202602010175", task:"20260201D013004", reward:9.592978642674554, completed:157},
+                {step:89, time:26700, vehicle:"social_P202602010172", task:"20260201D051009", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010145", task:"20260201D018003", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010164", task:"20260201D031008", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010198", task:"20260201D014006", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010194", task:"20260201D047007", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010211", task:"20260201D014005", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_P202602010209", task:"20260201D047005", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010152", task:"20260201D041009", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010206", task:"20260201D048003", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_P202602010259", task:"20260201D033006", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010121", task:"20260201D024007", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010063", task:"20260201D040005", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_P202602010245", task:"20260201D014006", reward:90.70176682057406, completed:170},
+                {step:89, time:26700, vehicle:"social_V202602010008", task:"20260201D052002", reward:90.70176682057406, completed:170},
+                {step:90, time:27000, vehicle:"social_V202602010164", task:"20260201D051003", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_V202602010194", task:"20260201D049001", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_P202602010209", task:"20260201D048004", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_V202602010152", task:"20260201D042004", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_V202602010206", task:"20260201D050004", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_P202602010259", task:"20260201D035008", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_V202602010121", task:"20260201D025004", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_V202602010063", task:"20260201D041013", reward:135.01298658748186, completed:179},
+                {step:90, time:27000, vehicle:"social_P202602010245", task:"20260201D041008", reward:135.01298658748186, completed:179},
+                {step:91, time:27300, vehicle:"social_V202602010194", task:"20260201D050002", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_P202602010209", task:"20260201D050001", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_V202602010152", task:"20260201D044002", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_P202602010259", task:"20260201D036005", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_V202602010063", task:"20260201D045004", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_P202602010245", task:"20260201D041012", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_P202602010149", task:"20260201D021003", reward:21.024490377196138, completed:187},
+                {step:91, time:27300, vehicle:"social_P202602010127", task:"20260201D047014", reward:21.024490377196138, completed:187},
+                {step:92, time:27600, vehicle:"social_V202602010152", task:"20260201D045001", reward:11.256599957039077, completed:192},
+                {step:92, time:27600, vehicle:"social_P202602010259", task:"20260201D036007", reward:11.256599957039077, completed:192},
+                {step:92, time:27600, vehicle:"social_V202602010063", task:"20260201D043005", reward:11.256599957039077, completed:192},
+                {step:92, time:27600, vehicle:"social_P202602010245", task:"20260201D042003", reward:11.256599957039077, completed:192},
+                {step:92, time:27600, vehicle:"social_P202602010127", task:"20260201D032002", reward:11.256599957039077, completed:192},
+                {step:93, time:27900, vehicle:"social_V202602010152", task:"20260201D046005", reward:16.086177462913206, completed:197},
+                {step:93, time:27900, vehicle:"social_P202602010259", task:"20260201D036009", reward:16.086177462913206, completed:197},
+                {step:93, time:27900, vehicle:"social_V202602010063", task:"20260201D045002", reward:16.086177462913206, completed:197},
+                {step:93, time:27900, vehicle:"social_P202602010245", task:"20260201D043004", reward:16.086177462913206, completed:197},
+                {step:93, time:27900, vehicle:"social_P202602010127", task:"20260201D051004", reward:16.086177462913206, completed:197},
+                {step:94, time:28200, vehicle:"social_V202602010152", task:"20260201D047002", reward:89.36299899639064, completed:203},
+                {step:94, time:28200, vehicle:"social_P202602010259", task:"20260201D036011", reward:89.36299899639064, completed:203},
+                {step:94, time:28200, vehicle:"social_V202602010063", task:"20260201D046004", reward:89.36299899639064, completed:203},
+                {step:94, time:28200, vehicle:"social_P202602010245", task:"20260201D044004", reward:89.36299899639064, completed:203},
+                {step:94, time:28200, vehicle:"social_V202602010110", task:"20260201D015006", reward:89.36299899639064, completed:203},
+                {step:94, time:28200, vehicle:"social_P202602010040", task:"20260201D020001", reward:89.36299899639064, completed:203},
+                {step:95, time:28500, vehicle:"social_V202602010152", task:"20260201D047013", reward:40.29065231884111, completed:206},
+                {step:95, time:28500, vehicle:"social_P202602010259", task:"20260201D038002", reward:40.29065231884111, completed:206},
+                {step:95, time:28500, vehicle:"social_V202602010063", task:"20260201D038002", reward:40.29065231884111, completed:206},
+                {step:95, time:28500, vehicle:"social_P202602010245", task:"20260201D046006", reward:40.29065231884111, completed:206},
+                {step:96, time:28800, vehicle:"social_V202602010152", task:"20260201D054004", reward:99.03091514802425, completed:211},
+                {step:96, time:28800, vehicle:"social_P202602010259", task:"20260201D051008", reward:99.03091514802425, completed:211},
+                {step:96, time:28800, vehicle:"social_V202602010063", task:"20260201D047011", reward:99.03091514802425, completed:211},
+                {step:96, time:28800, vehicle:"social_P202602010245", task:"20260201D047001", reward:99.03091514802425, completed:211},
+                {step:96, time:28800, vehicle:"social_P202602010107", task:"20260201D052010", reward:99.03091514802425, completed:211},
+                {step:97, time:29100, vehicle:"social_V202602010063", task:"20260201D048001", reward:8.835847939, completed:214},
+                {step:97, time:29100, vehicle:"social_P202602010245", task:"20260201D047004", reward:8.835847939, completed:214},
+                {step:97, time:29100, vehicle:"social_P202602010120", task:"20260201D015005", reward:8.835847939, completed:214},
+                {step:98, time:29400, vehicle:"social_V202602010063", task:"20260201D049003", reward:101.48092187293179, completed:216},
+                {step:98, time:29400, vehicle:"social_P202602010245", task:"20260201D047009", reward:101.48092187293179, completed:216},
+                {step:99, time:29700, vehicle:"social_V202602010063", task:"20260201D052003", reward:-1.633065675, completed:218},
+                {step:99, time:29700, vehicle:"social_P202602010245", task:"20260201D047012", reward:-1.633065675, completed:218},
+                {step:100, time:30000, vehicle:"social_P202602010245", task:"20260201D048002", reward:99.35211520678348, completed:220},
+                {step:100, time:30000, vehicle:"social_P202602010011", task:"20260201D016007", reward:99.35211520678348, completed:220},
+                {step:101, time:30300, vehicle:"social_P202602010059", task:"20260201D016010", reward:0.195, completed:221},
+                {step:102, time:30600, vehicle:"social_V202602010111", task:"20260201D062002", reward:1.02, completed:222}
+            ];
+
+            // 按步骤分组
+            const groupedByStep = {};
+            simData.forEach(d => {
+                if (!groupedByStep[d.step]) groupedByStep[d.step] = [];
+                groupedByStep[d.step].push(d);
+            });
+
+            // 所有步骤编号降序
+            const steps = Object.keys(groupedByStep).map(Number).sort((a,b) => b - a);
+            const recentSteps = steps.slice(0, 4); // 显示最近4步，避免过长
+
+            // 更新累计完成和当前步
+            if (simData.length > 0) {
+                document.getElementById('sim-completed').innerText = simData[simData.length-1].completed;
+            }
+            if (steps.length > 0) {
+                document.getElementById('sim-step').innerText = steps[0];
+            }
+
+            // 渲染任务列表
+            const container = document.getElementById('sim-task-list');
+            if (container) {
+                container.innerHTML = '';
+                recentSteps.forEach(step => {
+                    const records = groupedByStep[step];
+                    if (!records) return;
+                    // 只显示该步骤的前3条
+                    const displayRecords = records.slice(0, 3);
+                    const more = records.length > 3 ? `等${records.length}辆车` : '';
+                    const stepTimeMin = Math.floor(records[0].time / 60);
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'border-b border-slate-100 pb-1 mb-1 last:border-0';
+                    stepDiv.innerHTML = `
+                        <div class="flex justify-between text-[10px] font-medium text-emerald-600 mb-0.5">Step ${step} (${stepTimeMin}min) · 完成 ${records[0].completed}</div>
+                        ${displayRecords.map(r => `
+                            <div class="flex justify-between text-[9px] text-slate-600">
+                                <span>${r.vehicle.slice(-8)}</span>
+                                <span class="text-slate-400">${r.task.slice(-6)}</span>
+                                <span class="${r.reward>0?'text-emerald-500':'text-red-400'}">${r.reward.toFixed(1)}</span>
+                            </div>
+                        `).join('')}
+                        ${more ? `<div class="text-[8px] text-slate-400 mt-0.5">${more}</div>` : ''}
+                    `;
+                    container.appendChild(stepDiv);
+                });
+            }
+        })();
+    </script>
+</body>
+</html>
